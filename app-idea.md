@@ -22,9 +22,13 @@ Keep this tiny: one or two screens for Lab 3.
 
 - **Core screen(s):**
   1. **Check:** takes the URL (from the share sheet or pasted by hand) and shows the verdict (safe /
-     suspicious / phishing), the probability the model gave, and whether the answer came from the
+     uncertain / phishing), the probability the model gave, and whether the answer came from the
      device or the cloud.
   2. **History:** the list of checked links, each with its verdict and time.
+
+  The prototype grew past this plan. It ended up with five screens: a first-run consent screen, the
+  home screen (paste box + history), the result screen (which also shows what gets cut from the link
+  before a cloud check), a statistics screen and settings.
 - **The main "thing" the app manages:** a **link check** (a URL together with its verdict).
 - **A few fields of that thing:**
   - the URL (without query parameters) and its domain
@@ -63,8 +67,8 @@ answers are fine for now.
   - the ONNX model and the decision thresholds;
   - the check history;
   - the cloud consent setting and whether the first-run consent screen was answered. This one is
-    privacy-critical: if it is
-    lost, the app must fall back to "no consent" and ask again, never assume a yes;
+    privacy-critical: if it is lost, the app must fall back to "no consent" and ask again, never
+    assume a yes;
   - the "ask before each cloud check" preference, and the checks still waiting for the user's
     approval;
   - the queue of postponed cloud requests, so they are not lost on a restart;
@@ -74,8 +78,9 @@ answers are fine for now.
     with the user's consent. Consent is opt-in and asked on first launch. By default the user also
     approves each send: before anything leaves the phone, the app shows the link with the query and
     fragment struck through, lists every removed parameter (flagging ones that look like an email,
-    phone number, login token or ID), and waits for "Send" or "Keep on device". We also considered sending hashes, but the backend needs the actual URL
-    to follow redirects and check the domain, so a hash would not be enough.
+    phone number, login token or ID), and waits for "Send" or "Keep on device". We also considered
+    sending hashes, but the backend needs the actual URL to follow redirects and check the domain,
+    so a hash would not be enough.
   - **From the cloud:** the verdict and its reasons. The backend runs a larger model (a DistilBERT
     for URLs) and does the checks the phone cannot do: up-to-date threat lists (Google Safe
     Browsing, URLhaus), following redirects, and domain age.

@@ -23,26 +23,26 @@ Where did AI genuinely accelerate you? (screens, sample data, navigation, boiler
 
 Tested on an Android emulator (`smishield_test`, Android 14 / API 34, 1080×2340) with a debug build, on 2026-11-01.
 
-- **Rotate the device:** state did **not** survive. On a result screen for a link I had just
+- **Rotate the device:** state did **not** survive. On a result screen for a link we had just
   checked, rotating showed "This check is no longer in history." Going back, the history had reset
   to the 6 hardcoded samples. Worse, **settings reset silently**: after accepting cloud checks on
   the consent screen and rotating, "Cloud second opinion" was back to off, but the consent screen
-  was not shown again. The screen I was on was remembered, but the data was not. The cause is
+  was not shown again. The screen we were on was remembered, but the data was not. The cause is
   `remember { AppState() }` in `MainActivity`: the whole Activity is recreated on rotation, and
   `remember` only lives as long as that composition.
 - **Kill and reopen the app:** nothing was saved. The consent screen appeared again and the history
   was back to the 6 samples. The user's checks, the consent choice and any queued cloud checks are
   all lost.
 - **Airplane mode:** no crash, and on-device checks work, but it is **not honest**. With real
-  airplane mode on, I approved a cloud check for a shortened link and the app showed a "Phishing"
+  airplane mode on, we approved a cloud check for a shortened link and the app showed a "Phishing"
   verdict "decided by Cloud", with cloud signals and a cloud latency. The app never looks at the
   real network. Only the fake "Simulate offline" switch in Settings makes it defer the check. In a
   real app, that would be a fabricated result shown with full confidence.
-- **500 items in a list:** I shared one message with 500 links. The app handled it, with no crash and
+- **500 items in a list:** we shared one message with 500 links. The app handled it, with no crash and
   all 500 checked and listed, but scrolling the home list was **not smooth**: `dumpsys gfxinfo`
   over 15 flings reported 57 of 59 frames janky (97%), median frame time 93 ms, 99th percentile
   300 ms. This is a debug build on an emulator, so a release build on a real phone would be much
-  better, and I still need to measure that before blaming the code. Likely costs: every row creates
+  better, and we still need to measure that before blaming the code. Likely costs: every row creates
   a new `DateFormat`, and the summary card counts the whole history on every recomposition.
   It also showed a design problem: all 500 links landed in the uncertain range, so each one
   needs its own "Send link" tap. There is no "approve all", and the app only opened the first one.
@@ -50,6 +50,13 @@ Tested on an Android emulator (`smishield_test`, Android 14 / API 34, 1080×2340
   open started a **second copy** of the screen (two `MainActivity` instances in the
   task), each with its own separate history. One user, two inconsistent states, with no sync even
   inside one phone.
+- **Two people editing the same data:** there are no accounts, no server-side history and no sync
+  yet, so nothing can conflict right now. It will start to matter later in two places:
+  - **Cached cloud verdicts:** a link marked "safe" yesterday can be on a threat list today, so a
+    cached verdict is stale data that has to expire or be refreshed.
+  - **One user, several phones:** if the history is ever synced, the same link can have different
+    verdicts on two devices (for example, checked before and after a model update), and we would
+    need a rule for which one wins.
 
 ## What is missing for production
 
@@ -82,6 +89,7 @@ Add any gaps specific to your app that are not in the table above.
 | Statistics show fake latencies; the real on-device vs. cloud latency/energy measurement is not done | Lab 10 |
 | History list is janky with 500 items in a debug build; needs measuring in release and fixing (cache `DateFormat`, precompute aggregates) | Lab 4 / Lab 9 |
 | One approval per uncertain link; no batch approval for a message with many links | Lab 4 (UI state) |
+
 ## One sentence
 
 In your own words: what is the difference between what AI gave you today and a production app, and why
