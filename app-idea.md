@@ -13,13 +13,8 @@ in the project spot-check, especially the mobile-computing framing at the bottom
   to decide on the spot whether to tap. On a small phone screen you can barely see the full URL,
   shortened links hide where they really go, and opening the page to "see what it is" is exactly the
   risk we want to avoid. The check looks **only at the URL** and never opens the page on the phone.
-- **Target users:**
-  - **Everyday users** who get a suspicious message and want a quick answer. They share the message
-    from any app (SMS, WhatsApp, email) to LinkGuard.
-  - **Company employees** on MDM-managed phones. The company installs and configures the app, and it
-    runs as an Accessibility Service that catches the link at the moment it is opened, before the
-    page loads. Because this mode is invasive, we only see it working in this managed setting, not
-    for everyday users.
+- **Target users:** everyday users who get a suspicious message and want a quick answer. They share
+  the message from any app (SMS, WhatsApp, email) to LinkGuard, or paste the link by hand.
 
 ## The prototype scope
 
@@ -51,7 +46,7 @@ backend come in later labs.
   that were postponed because there was no connection.
 - **Where does data come from?**
   - The URL comes from the share sheet (text shared from another app, which we extract the link
-    from) or, in the company version, from the Accessibility Service.
+    from) or is pasted by hand.
   - The local score comes from the **urlbert-tiny** model (a very small BERT trained on phishing
     URLs, in ONNX format), run with ONNX Runtime for Android.
   - The cloud verdict comes from our backend.
@@ -67,12 +62,19 @@ answers are fine for now.
 - **What must persist on the device** (survive a restart)?
   - the ONNX model and the decision thresholds;
   - the check history;
-  - the cloud consent setting (and, in the MDM version, the configuration the company enforces);
+  - the cloud consent setting and whether the first-run consent screen was answered. This one is
+    privacy-critical: if it is
+    lost, the app must fall back to "no consent" and ask again, never assume a yes;
+  - the "ask before each cloud check" preference, and the checks still waiting for the user's
+    approval;
   - the queue of postponed cloud requests, so they are not lost on a restart;
   - possibly a cache of cloud verdicts, so a link that was already checked is not sent again.
 - **What crosses the network** (comes from or goes to a server or API)?
   - **To the cloud:** only the URL, without parameters (parameters can contain user data), and only
-    with the user's consent. We also considered sending hashes, but the backend needs the actual URL
+    with the user's consent. Consent is opt-in and asked on first launch. By default the user also
+    approves each send: before anything leaves the phone, the app shows the link with the query and
+    fragment struck through, lists every removed parameter (flagging ones that look like an email,
+    phone number, login token or ID), and waits for "Send" or "Keep on device". We also considered sending hashes, but the backend needs the actual URL
     to follow redirects and check the domain, so a hash would not be enough.
   - **From the cloud:** the verdict and its reasons. The backend runs a larger model (a DistilBERT
     for URLs) and does the checks the phone cannot do: up-to-date threat lists (Google Safe
@@ -82,6 +84,11 @@ answers are fine for now.
   - If the link also needed a cloud check (score in the uncertain zone, or a shortened link), the
     request is postponed and queued, and the user sees a message that the full check could not be
     done right now. This is shown together with the local verdict, which is marked as provisional.
+  - The history, the statistics and the "what was cut" preview are all computed on the device, so
+    they work offline too.
+  - "Offline" has to come from the real network state (ConnectivityManager), not from an in-app
+    switch. Testing the prototype in real airplane mode showed it still returning a "cloud" verdict,
+    because only the fake "Simulate offline" switch was checked.
 - **The placement question:** is there any computation that could run on-device instead of in the
   cloud (for example a model, a search, image processing)? If you moved it on-device, what would you
   trade in latency, energy, privacy, and bandwidth?
@@ -101,14 +108,19 @@ answers are fine for now.
   - **Energy:** a very small model uses little power for inference; a network request wakes up the
     radio, which on mobile is often more expensive than the inference itself.
   - **Privacy:** locally nothing leaves the phone; with the cloud the URL leaves (minimized by
-    stripping parameters, and only with consent).
+    stripping parameters, only with consent, and by default only after the user has seen exactly
+    what will be sent). The trade-off here is friction: every grey-zone link costs the user a tap,
+    so a large batch of uncertain links means many approvals.
   - **Bandwidth:** locally the only cost is downloading the model once (the app gets bigger); with
     the cloud every check is a request, but a small one.
   - **What the cloud gains:** a larger model and fresh data (threat lists, redirects, domain age)
     that the phone cannot have.
 
   What we will measure: how often checks go to the cloud, how much accuracy improves compared to the
-  local-only version, and the latency of each.
+  local-only version, and the latency of each. The prototype already has a statistics screen with
+  these numbers (share decided on device vs. cloud, why links were escalated, average latency of
+  each path, parameters stripped). For now they come from fake data, but the same screen will show
+  the real measurements later.
 
 ## What comes next
 

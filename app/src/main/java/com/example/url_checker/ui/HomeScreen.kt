@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -52,6 +53,7 @@ fun HomeScreen(
     state: AppState,
     onOpenCheck: (Long) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenStats: () -> Unit,
 ) {
     var input by remember { mutableStateOf("") }
     var noUrlFound by remember { mutableStateOf(false) }
@@ -62,6 +64,7 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text("Link Guard") },
                 actions = {
+                    IconButton(onClick = onOpenStats) { Icon(Icons.AutoMirrored.Filled.List, "Statistics") }
                     IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, "Settings") }
                 },
             )
@@ -109,7 +112,7 @@ fun HomeScreen(
                 }
             }
 
-            item { StatusCard(state, pending) }
+            item { StatusCard(state, pending, onOpenStats) }
 
             item {
                 Row(
@@ -147,7 +150,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun StatusCard(state: AppState, pending: Int) {
+private fun StatusCard(state: AppState, pending: Int, onOpenStats: () -> Unit) {
     val total = state.history.size
     val phishing = state.history.count { it.verdict == Verdict.PHISHING }
     val cloud = state.history.count { it.decidedBy == DecidedBy.CLOUD }
@@ -160,6 +163,9 @@ private fun StatusCard(state: AppState, pending: Int) {
                 Stat("$total", "checked")
                 Stat("$phishing", "phishing")
                 Stat(if (total == 0) "–" else "${cloud * 100 / total}%", "sent to cloud")
+            }
+            TextButton(onClick = onOpenStats, modifier = Modifier.align(Alignment.End)) {
+                Text("See all statistics")
             }
             if (state.settings.simulateOffline || pending > 0) {
                 Spacer(Modifier.height(12.dp))
@@ -195,5 +201,5 @@ private fun Stat(value: String, label: String) {
 @Preview(showBackground = true)
 @Composable
 private fun HomePreview() {
-    UrlCheckerTheme(dynamicColor = false) { HomeScreen(AppState(), {}, {}) }
+    UrlCheckerTheme(dynamicColor = false) { HomeScreen(AppState(), {}, {}, {}) }
 }

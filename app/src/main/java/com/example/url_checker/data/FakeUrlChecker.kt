@@ -1,6 +1,7 @@
 package com.example.url_checker.data
 
 import java.net.URI
+import java.net.URLDecoder
 import kotlin.math.abs
 import kotlin.random.Random
 
@@ -38,6 +39,42 @@ object FakeUrlChecker {
         URI(u.scheme, u.authority, u.path, null, null).toString()
     }.getOrElse { url.substringBefore('?').substringBefore('#') }
 
+    /** The part of [url] that is kept: everything before the query (`?`) or fragment (`#`). */
+    fun keptPart(url: String): String = url.substringBefore('?').substringBefore('#')
+
+    /** Every query parameter and the fragment that [sanitize] drops, with a hint if it looks personal. */
+    fun removedParts(url: String): List<RemovedPart> {
+        val query = url.substringBefore('#').substringAfter('?', "")
+        val fragment = url.substringAfter('#', "")
+        val params = query.split('&').filter { it.isNotEmpty() }.map { p ->
+            val name = p.substringBefore('=')
+            val value = p.substringAfter('=', "")
+            RemovedPart(RemovedPart.Kind.QUERY_PARAM, name, value, sensitiveHint(name, value))
+        }
+        return if (fragment.isEmpty()) params
+        else params + RemovedPart(RemovedPart.Kind.FRAGMENT, "#", fragment, sensitiveHint("", fragment))
+    }
+
+    private val emailRegex = Regex("""[^@\s]+@[^@\s]+\.[a-z]{2,}""", RegexOption.IGNORE_CASE)
+    private val phoneKeys = Regex("phone|tel|mobile|msisdn", RegexOption.IGNORE_CASE)
+    private val secretKeys = Regex("token|session|sid|auth|key|code|otp|pass", RegexOption.IGNORE_CASE)
+    private val idKeys = Regex("^(id|uid|user|userid|user_id|client|account|cnp|awb)$", RegexOption.IGNORE_CASE)
+    private val trackingKeys = Regex("^(utm_.*|fbclid|gclid|ref|mc_eid)$", RegexOption.IGNORE_CASE)
+
+    private fun sensitiveHint(name: String, rawValue: String): String? {
+        val value = runCatching { URLDecoder.decode(rawValue, "UTF-8") }.getOrDefault(rawValue)
+        val digits = value.count { it.isDigit() }
+        return when {
+            emailRegex.containsMatchIn(value) -> "email address"
+            phoneKeys.containsMatchIn(name) ||
+                (digits in 9..15 && digits >= value.length - 2) -> "phone number"
+            secretKeys.containsMatchIn(name) -> "login token / secret"
+            idKeys.matches(name) -> "personal ID"
+            trackingKeys.matches(name) -> "tracking tag"
+            else -> null
+        }
+    }
+
     fun host(url: String): String =
         runCatching { URI(url).host?.removePrefix("www.") }.getOrNull() ?: url
 
@@ -65,6 +102,8 @@ object FakeUrlChecker {
         source: CheckSource,
         id: Long,
         now: Long = System.currentTimeMillis(),
+        /** False = stop before the cloud so the user can review what would be sent. */
+        cloudApproved: Boolean = !settings.askBeforeCloud,
     ): UrlCheck {
         val rnd = Random(url.hashCode())
         val local = localScore(url)
@@ -92,6 +131,7 @@ object FakeUrlChecker {
         )
         if (escalation == EscalationReason.NONE) return base
         if (!settings.cloudConsent) return base.copy(decidedBy = DecidedBy.CLOUD_SKIPPED_NO_CONSENT)
+        if (!cloudApproved) return base.copy(decidedBy = DecidedBy.CLOUD_AWAITING_APPROVAL)
         if (settings.simulateOffline) return base.copy(decidedBy = DecidedBy.CLOUD_PENDING_OFFLINE)
 
         // Fake cloud: shorteners resolve to something, grey-zone gets pushed to one side.
@@ -126,16 +166,18 @@ object FakeUrlChecker {
     }
 
     /** Hardcoded history so the list isn't empty on first launch. */
-    fun sampleHistory(settings: Settings = Settings()): List<UrlCheck> {
+    fun sampleHistory(
+        settings: Settings = Settings(cloudConsent = true, consentAsked = true, askBeforeCloud = false),
+    ): List<UrlCheck> {
         val now = System.currentTimeMillis()
         val min = 60_000L
         return listOf(
             "https://www.emag.ro/telefoane-mobile/c?ref=hp_menu" to CheckSource.SHARE_SHEET,
             "http://fancourier-colet-plata.xyz/verify?id=88213&phone=0722" to CheckSource.SHARE_SHEET,
             "https://bit.ly/3xYz9Qa" to CheckSource.SHARE_SHEET,
-            "https://bt-secure-login.ro-account.com/update" to CheckSource.ACCESSIBILITY,
+            "https://bt-secure-login.ro-account.com/update" to CheckSource.SHARE_SHEET,
             "https://github.com/onnx/onnxruntime" to CheckSource.MANUAL,
-            "http://192.168.44.12/paypal/signin" to CheckSource.ACCESSIBILITY,
+            "http://192.168.44.12/paypal/signin" to CheckSource.MANUAL,
         ).mapIndexed { i, (url, src) ->
             check(url, settings, src, id = i.toLong() + 1, now = now - (i + 1) * 37 * min)
         }

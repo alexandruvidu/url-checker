@@ -56,6 +56,19 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit) {
                     })
                 },
             )
+            ListItem(
+                headlineContent = { Text("Ask before each cloud check") },
+                supportingContent = {
+                    Text("Show exactly what was cut from the link and what would be sent, and wait for your OK.")
+                },
+                trailingContent = {
+                    Switch(
+                        checked = s.askBeforeCloud,
+                        enabled = s.cloudConsent,
+                        onCheckedChange = { state.settings = s.copy(askBeforeCloud = it) },
+                    )
+                },
+            )
             HorizontalDivider()
 
             SectionHeader("Detection")
@@ -72,19 +85,6 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit) {
                             "Chosen on a validation set to keep the on-device error under 1%.",
                     )
                 },
-            )
-            HorizontalDivider()
-
-            SectionHeader("Managed devices")
-            ListItem(
-                headlineContent = { Text("Check links when opened") },
-                supportingContent = {
-                    Text(
-                        "Uses an Accessibility Service to catch links before the page loads. " +
-                            "Meant for company phones configured via MDM.",
-                    )
-                },
-                trailingContent = { Switch(checked = false, onCheckedChange = null, enabled = false) },
             )
             HorizontalDivider()
 

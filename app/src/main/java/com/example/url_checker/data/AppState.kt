@@ -28,9 +28,27 @@ class AppState {
     fun retryPending() {
         history.replaceAll { c ->
             if (c.decidedBy == DecidedBy.CLOUD_PENDING_OFFLINE)
-                FakeUrlChecker.check(c.originalUrl, settings, c.source, c.id, c.checkedAt)
+                FakeUrlChecker.check(c.originalUrl, settings, c.source, c.id, c.checkedAt, cloudApproved = true)
             else c
         }
+    }
+
+    /** Answer from the first-run consent screen. */
+    fun completeConsent(allowCloud: Boolean) {
+        settings = settings.copy(cloudConsent = allowCloud, consentAsked = true)
+    }
+
+    /** User reviewed the stripped link and agreed to send it. */
+    fun approveCloud(id: Long) = replace(id) {
+        FakeUrlChecker.check(it.originalUrl, settings, it.source, it.id, it.checkedAt, cloudApproved = true)
+    }
+
+    /** User reviewed the stripped link and kept it on the phone: the local verdict stands. */
+    fun declineCloud(id: Long) = replace(id) { it.copy(decidedBy = DecidedBy.CLOUD_DECLINED) }
+
+    private fun replace(id: Long, f: (UrlCheck) -> UrlCheck) {
+        val i = history.indexOfFirst { it.id == id }
+        if (i >= 0) history[i] = f(history[i])
     }
 
     fun clearHistory() = history.clear()

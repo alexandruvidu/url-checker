@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,6 +46,8 @@ import com.example.url_checker.data.Settings
 import com.example.url_checker.data.UrlCheck
 import com.example.url_checker.ui.components.LabeledValue
 import com.example.url_checker.ui.components.MonoText
+import com.example.url_checker.ui.components.SanitizedUrlDiff
+import com.example.url_checker.ui.components.SectionCard as Section
 import com.example.url_checker.ui.components.decidedByLabel
 import com.example.url_checker.ui.components.formatTime
 import com.example.url_checker.ui.components.verdictStyle
@@ -53,7 +56,14 @@ import com.example.url_checker.ui.theme.UrlCheckerTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ResultScreen(check: UrlCheck?, settings: Settings, onBack: () -> Unit, onRetry: () -> Unit) {
+fun ResultScreen(
+    check: UrlCheck?,
+    settings: Settings,
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+    onApproveCloud: () -> Unit,
+    onDeclineCloud: () -> Unit,
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -79,6 +89,12 @@ fun ResultScreen(check: UrlCheck?, settings: Settings, onBack: () -> Unit, onRet
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             VerdictHeader(check)
+            if (check.decidedBy == DecidedBy.CLOUD_AWAITING_APPROVAL) {
+                ApprovalCard(check, "Send for a second opinion?", onApproveCloud, onDeclineCloud)
+            }
+            if (check.decidedBy == DecidedBy.CLOUD_DECLINED) {
+                ApprovalCard(check, "You kept this link on your phone", onApproveCloud, onDecline = null)
+            }
             if (check.decidedBy == DecidedBy.CLOUD_PENDING_OFFLINE) {
                 PendingBanner(offline = settings.simulateOffline, onRetry = onRetry)
             }
@@ -111,6 +127,8 @@ private fun VerdictHeader(check: UrlCheck) {
                 when {
                     check.decidedBy == DecidedBy.CLOUD_PENDING_OFFLINE ->
                         "We couldn't finish checking this link because you're offline. Don't open it yet."
+                    check.decidedBy == DecidedBy.CLOUD_AWAITING_APPROVAL ->
+                        "The on-device check isn't enough for this link. Review what would be sent below."
                     s.label == "Phishing" -> "Don't open this link and don't enter any passwords or card details."
                     s.label == "Looks safe" -> "No signs of phishing were found in this link."
                     else -> "We're not sure about this link. Be careful before opening it."
@@ -124,6 +142,41 @@ private fun VerdictHeader(check: UrlCheck) {
                 "${sourceLabel(check.source)} · ${formatTime(check.checkedAt)}",
                 style = MaterialTheme.typography.labelSmall,
             )
+        }
+    }
+}
+
+/** Shown before escalating: exactly what was cut from the link and what the server would receive. */
+@Composable
+private fun ApprovalCard(check: UrlCheck, title: String, onApprove: () -> Unit, onDecline: (() -> Unit)?) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                when (check.escalation) {
+                    EscalationReason.SHORTENER ->
+                        "This is a shortened link. Your phone can't see where it leads without opening it; " +
+                            "the server can follow the redirects safely."
+                    else ->
+                        "The on-device model rates this ${pct(check.localScore)} likely phishing, which is " +
+                            "too close to call. The server can check threat lists and the domain's age."
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+            HorizontalDivider()
+            SanitizedUrlDiff(check.originalUrl, check.sanitizedUrl, sentLabel = "Would send")
+            Text(
+                "The message text is never sent.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            ) {
+                onDecline?.let { OutlinedButton(onClick = it) { Text("Keep on device") } }
+                Button(onClick = onApprove) { Text(if (onDecline == null) "Send anyway" else "Send link") }
+            }
         }
     }
 }
@@ -240,29 +293,12 @@ private fun PrivacySection(check: UrlCheck) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        MonoText(check.sanitizedUrl)
-        if (check.sanitizedUrl != check.originalUrl) {
-            Text(
-                "Removed: ${check.originalUrl.removePrefix(check.sanitizedUrl)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        SanitizedUrlDiff(check.originalUrl, check.sanitizedUrl, sentLabel = if (sent) "Sent" else "Would send")
         Text(
             "The message text is never sent.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
-
-@Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            content()
-        }
     }
 }
 
@@ -280,18 +316,16 @@ private fun pct(f: Float) = "${(f * 100).toInt()}%"
 
 private fun sourceLabel(s: CheckSource) = when (s) {
     CheckSource.SHARE_SHEET -> "Shared from another app"
-    CheckSource.MANUAL -> "Pasted manually"
-    CheckSource.ACCESSIBILITY -> "Caught on open (managed device)"
-}
+    CheckSource.MANUAL -> "Pasted manually"}
 
 @Preview(showBackground = true)
 @Composable
 private fun ResultPreview() {
-    val s = Settings()
+    val s = Settings(cloudConsent = true) // askBeforeCloud defaults to true → preview shows the approval card
     UrlCheckerTheme(dynamicColor = false) {
         ResultScreen(
             FakeUrlChecker.check("https://bit.ly/3xYz9Qa?utm=sms", s, CheckSource.SHARE_SHEET, 1),
-            s, {}, {},
+            s, {}, {}, {}, {},
         )
     }
 }

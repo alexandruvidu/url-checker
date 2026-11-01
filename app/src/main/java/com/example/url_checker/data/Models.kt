@@ -9,17 +9,21 @@ enum class DecidedBy {
     ON_DEVICE,
     /** Escalated: cloud DistilBERT + threat lists + redirects + domain age. */
     CLOUD,
+    /** Needs the cloud; waiting for the user to approve exactly what will be sent. */
+    CLOUD_AWAITING_APPROVAL,
     /** Needed the cloud, but no connection: request deferred, local answer shown. */
     CLOUD_PENDING_OFFLINE,
     /** Needed the cloud, but the user did not consent to sending URLs. */
     CLOUD_SKIPPED_NO_CONSENT,
+    /** The user reviewed the stripped link and chose not to send it. */
+    CLOUD_DECLINED,
 }
 
 /** Why a check was escalated (or not) to the cloud. */
 enum class EscalationReason { NONE, GREY_ZONE, SHORTENER }
 
 /** How the URL reached the app. */
-enum class CheckSource { SHARE_SHEET, MANUAL, ACCESSIBILITY }
+enum class CheckSource { SHARE_SHEET, MANUAL }
 
 /** One extra check that only the backend can do. */
 data class CloudSignal(
@@ -46,8 +50,24 @@ data class UrlCheck(
     val checkedAt: Long,
 )
 
+/** One piece cut from a URL before it may leave the phone. */
+data class RemovedPart(
+    val kind: Kind,
+    val name: String,       // parameter name, or "#" for the fragment
+    val value: String,
+    /** Why this piece looks sensitive, e.g. "phone number"; null if nothing recognised. */
+    val hint: String?,
+) {
+    enum class Kind { QUERY_PARAM, FRAGMENT }
+}
+
 data class Settings(
-    val cloudConsent: Boolean = true,
+    /** Opt-in: off until the user agrees on the consent screen. */
+    val cloudConsent: Boolean = false,
+    /** Whether the first-run consent screen has been answered. */
+    val consentAsked: Boolean = false,
+    /** Show the stripped link and wait for approval before each cloud check. */
+    val askBeforeCloud: Boolean = true,
     /** Prototype-only switch to fake airplane mode. */
     val simulateOffline: Boolean = false,
     /** Below this the local model says SAFE. */
