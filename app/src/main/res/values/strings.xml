@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">url-checker</string>
+    <string name="app_name">Link Guard</string>
+    <string name="share_label">Check link</string>
 </resources>

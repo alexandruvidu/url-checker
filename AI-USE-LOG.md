@@ -15,7 +15,7 @@ anything where the model produced a chunk of code or a design decision you accep
 
 | Date | What you were trying to do | What you prompted (short) | What the model produced | What you accepted or rejected, and WHY |
 |---|---|---|---|---|
-| | | | | |
+| 2026-11-01 | Build the prototype GUI for the phishing URL checker | "Develop the GUI for this app" + pasted design notes (share sheet, urlbert-tiny on device, cloud escalation, privacy, offline) | Migrated project from Views to Compose (Gradle, minSdk 26, removed `activity_main.xml`); `MainActivity` with NavHost + ACTION_SEND share-sheet intent filter; `HomeScreen` (paste box, stats card, history list), `ResultScreen` (verdict header, on-device/cloud score bars, cloud signals, privacy/sanitized URL, offline pending banner), `SettingsScreen` (cloud consent, thresholds, MDM accessibility placeholder, simulate offline); fake data layer `FakeUrlChecker` (URL extraction, query stripping, heuristic scores, threshold + shortener escalation), `AppState`, `Models.kt`; `UrlCheckerTheme` with fixed verdict colours | TODO: accepted/rejected + why |
 | | | | | |
 | | | | | |
 
